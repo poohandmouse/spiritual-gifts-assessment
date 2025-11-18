@@ -1,0 +1,21 @@
+// WARNING: Replace the placeholders below with your actual Firebase Web App config JSON.
+    // This is required for the application to save/load progress using Firestore.
+
+    // 1. Your unique app identifier (used for Firestore path)
+    window.__app_id = "my-gifts-assessment-1234"; 
+
+    // 2. Your Firebase Web App Config JSON string
+    // Get this from your Firebase Project Settings -> General -> Your Apps -> Config
+    window.__firebase_config = JSON.stringify({
+        "apiKey": "YOUR_API_KEY_HERE",
+        "authDomain": "YOUR_PROJECT_ID.firebaseapp.com",
+        "projectId": "YOUR_PROJECT_ID",
+        "storageBucket": "YOUR_PROJECT_ID.appspot.com",
+        "messagingSenderId": "YOUR_MESSAGING_SENDER_ID",
+        "appId": "YOUR_APP_ID_FROM_FIREBASE"
+        // DatabaseURL and measurementId are optional
+    });
+
+    // 3. Custom Auth Token (For simple deployments, we don't need a token, 
+    // the app will sign in anonymously if this is null or missing)
+    window.__initial_auth_token = null;
