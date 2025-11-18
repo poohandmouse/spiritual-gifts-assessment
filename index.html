@@ -1,21 +1,387 @@
-// WARNING: Replace the placeholders below with your actual Firebase Web App config JSON.
-    // This is required for the application to save/load progress using Firestore.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spiritual Gifts Assessment</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // 1. Your unique app identifier (used for Firestore path)
-    window.__app_id = "my-gifts-assessment-1234"; 
+        // Global variables provided by the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-    // 2. Your Firebase Web App Config JSON string
-    // Get this from your Firebase Project Settings -> General -> Your Apps -> Config
-    window.__firebase_config = JSON.stringify({
-        "apiKey": "YOUR_API_KEY_HERE",
-        "authDomain": "YOUR_PROJECT_ID.firebaseapp.com",
-        "projectId": "YOUR_PROJECT_ID",
-        "storageBucket": "YOUR_PROJECT_ID.appspot.com",
-        "messagingSenderId": "YOUR_MESSAGING_SENDER_ID",
-        "appId": "YOUR_APP_ID_FROM_FIREBASE"
-        // DatabaseURL and measurementId are optional
-    });
+        let db;
+        let auth;
+        let userId = null;
+        let isFirebaseReady = false;
 
-    // 3. Custom Auth Token (For simple deployments, we don't need a token, 
-    // the app will sign in anonymously if this is null or missing)
-    window.__initial_auth_token = null;
+        // --- Firebase Initialization ---
+        const initializeFirebase = async () => {
+            if (Object.keys(firebaseConfig).length === 0) {
+                console.error("Firebase config is missing.");
+                return;
+            }
+
+            try {
+                // setLogLevel('Debug'); // Uncomment for debugging
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Authenticate user
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // Wait for auth state to be confirmed
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        isFirebaseReady = true;
+                        console.log(`Firebase authenticated. User ID: ${userId}`);
+                        // Start assessment only after Firebase is ready
+                        window.onload = () => {
+                            window.app.loadProgressAndStart();
+                        };
+                    } else {
+                        console.error("User not authenticated.");
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error initializing or authenticating Firebase:", error);
+                // Fallback to start without saving/loading if Firebase fails
+                window.onload = () => {
+                    window.app.loadProgressAndStart(true); 
+                };
+            }
+        };
+        
+        // Expose Firebase functions to the global scope for use by the main script
+        window.app = window.app || {};
+        window.app.firestore = {
+            saveProgress: async (data) => {
+                if (!isFirebaseReady) {
+                    console.warn("Firebase not ready. Cannot save progress.");
+                    return;
+                }
+                const docRef = doc(db, "artifacts", appId, "users", userId, "assessment_progress", "data");
+                try {
+                    // Convert Array to Map/Object for safe Firestore storage
+                    const saveData = { answers: JSON.stringify(data) };
+                    await setDoc(docRef, saveData);
+                    console.log("Progress saved to Firestore.");
+                } catch (e) {
+                    console.error("Error saving document: ", e);
+                }
+            },
+            loadProgress: async () => {
+                if (!isFirebaseReady) {
+                    console.warn("Firebase not ready. Cannot load progress.");
+                    return null;
+                }
+                const docRef = doc(db, "artifacts", appId, "users", userId, "assessment_progress", "data");
+                try {
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        // Parse the stringified array back into an array
+                        if (data && data.answers) {
+                            console.log("Progress loaded from Firestore.");
+                            return JSON.parse(data.answers);
+                        }
+                    }
+                    console.log("No saved progress found in Firestore.");
+                    return null;
+                } catch (e) {
+                    console.error("Error loading document: ", e);
+                    return null;
+                }
+            }
+        };
+
+        initializeFirebase();
+    </script>
+    <style>
+        /* Custom styling for appearance and focus */
+        .container-box {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .input-score {
+            font-size: 2.5rem;
+            text-align: center;
+        }
+        /* Custom focus ring to be clear */
+        input:focus {
+            box-shadow: 0 0 0 4px rgba(66, 153, 225, 0.5); /* blue focus ring */
+            border-color: #4299e1;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans p-4 md:p-8">
+
+    <div id="app" class="container-box bg-white shadow-xl rounded-xl p-6 md:p-10 space-y-6">
+        <h1 class="text-3xl md:text-4xl font-bold text-center text-indigo-700">Spiritual Gifts Assessment</h1>
+        <hr class="border-indigo-200">
+
+        <!-- Assessment Section -->
+        <div id="assessment-view" class="space-y-6">
+            <h2 class="text-xl font-semibold text-gray-700">Answer 200 Questions (0-5)</h2>
+            <div id="question-area" class="bg-indigo-50 p-6 rounded-lg shadow-md">
+                <!-- Question and Input will be rendered here -->
+            </div>
+            
+            <form id="score-form" class="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 sm:space-x-4">
+                <input type="number" 
+                       id="score-input" 
+                       min="0" 
+                       max="5" 
+                       value="0" 
+                       required 
+                       class="input-score w-full sm:w-1/3 p-3 border-2 border-gray-300 rounded-lg focus:ring-4 focus:ring-indigo-300 transition duration-150 shadow-inner"
+                       placeholder="0-5">
+                
+                <button type="submit" 
+                        class="w-full sm:w-2/3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150 shadow-lg hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-indigo-300">
+                    Submit Score (Press Enter)
+                </button>
+            </form>
+
+            <div id="progress-container" class="space-y-2 pt-4">
+                <p id="progress-text" class="text-sm text-gray-600">Progress: 0/200 (0%)</p>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section (Initially hidden) -->
+        <div id="results-view" class="hidden space-y-6">
+            <h2 class="text-3xl font-bold text-center text-green-700">Assessment Complete!</h2>
+            <div id="top-gift-display" class="bg-green-100 p-6 rounded-xl border-2 border-green-500 text-center">
+                <!-- Top gift will be displayed here -->
+            </div>
+
+            <div id="top-four-display" class="bg-gray-50 p-4 rounded-lg">
+                <h3 class="text-xl font-semibold mb-3">Your Top 4 Gifts</h3>
+                <div id="top-four-list" class="space-y-2">
+                    <!-- Top 4 list will be displayed here -->
+                </div>
+            </div>
+
+            <button onclick="window.app.resetAssessment()" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-lg transition duration-150">Start New Assessment</button>
+        </div>
+        
+        <div id="status-message" class="text-center p-3 text-red-600 hidden bg-red-100 rounded-lg"></div>
+
+    </div>
+
+    <script>
+        // --- Assessment Data ---
+        const CATEGORIES = [
+            "Apostleship", "Prophecy", "Evangelism", "Shepherding", "Teaching",
+            "Serving", "Exhortation", "Giving", "Giving Aid", "Compassion",
+            "Healing", "Working Miracles", "Tongues", "Interpretation of Tongues",
+            "Wisdom", "Knowledge", "Faith", "Discernment", "Helps", "Administration"
+        ];
+        // Note: The mapping is question_number % 20 gives the index (0-19) for the gift.
+        // Q1 -> index 0 (Apostleship), Q20 -> index 19 (Administration), Q21 -> index 0, etc.
+
+        // Global State
+        let currentAnswers = new Array(201).fill(null); // Index 1 to 200 for Q1 to Q200
+        let currentQuestion = 1;
+
+        // --- DOM Elements ---
+        const questionArea = document.getElementById('question-area');
+        const scoreForm = document.getElementById('score-form');
+        const scoreInput = document.getElementById('score-input');
+        const progressText = document.getElementById('progress-text');
+        const progressBar = document.getElementById('progress-bar');
+        const assessmentView = document.getElementById('assessment-view');
+        const resultsView = document.getElementById('results-view');
+        const topGiftDisplay = document.getElementById('top-gift-display');
+        const topFourList = document.getElementById('top-four-list');
+        const statusMessage = document.getElementById('status-message');
+
+
+        // --- Core Logic ---
+
+        // Function to show transient status messages (like validation errors)
+        const showStatus = (message, isError = false) => {
+            statusMessage.textContent = message;
+            statusMessage.className = `text-center p-3 rounded-lg ${isError ? 'text-red-600 bg-red-100' : 'text-green-600 bg-green-100'}`;
+            statusMessage.style.display = 'block';
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 3000);
+        };
+
+        // Renders the current question and ensures the input is focused and selected.
+        const updateUIAndFocus = () => {
+            // 1. Update Question Text
+            questionArea.innerHTML = `<h3 class="text-2xl font-bold text-indigo-800">Question ${currentQuestion} / 200</h3>
+                                    <p class="text-lg mt-2 text-gray-600">Score 0 (Not at all) to 5 (Consistently and strongly)</p>`;
+
+            // 2. Reset and Focus Input for rapid entry
+            scoreInput.value = currentAnswers[currentQuestion] || 0;
+            scoreInput.focus();
+            scoreInput.select(); // Selects the existing text ('0' or previous score)
+            
+            // 3. Update Progress Bar
+            let answeredCount = currentAnswers.filter(a => a !== null).length;
+            const progress = (answeredCount / 200) * 100;
+            progressText.textContent = `Progress: ${answeredCount -1}/200 (${progress.toFixed(0)}%)`; // -1 because index 0 is skipped
+            progressBar.style.width = `${progress}%`;
+            
+            // 4. Check if complete
+            if (answeredCount - 1 >= 200) {
+                renderResults();
+            }
+            
+            // IMPORTANT: Since we are not using Streamlit's rerender, we MUST manually check and update the progress count.
+            window.app.firestore.saveProgress(currentAnswers);
+        };
+
+        // Handles form submission (triggered by button click or ENTER key)
+        scoreForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const score = parseInt(scoreInput.value, 10);
+
+            if (score < 0 || score > 5 || isNaN(score)) {
+                showStatus("Error: Score must be between 0 and 5.", true);
+                scoreInput.value = currentAnswers[currentQuestion] || 0; // Reset input
+                scoreInput.focus();
+                scoreInput.select();
+                return;
+            }
+
+            // Save the score
+            currentAnswers[currentQuestion] = score;
+            
+            // Move to the next unanswered question
+            currentQuestion++;
+            while (currentQuestion <= 200 && currentAnswers[currentQuestion] !== null) {
+                currentQuestion++;
+            }
+            
+            if (currentQuestion > 200) {
+                renderResults();
+            } else {
+                updateUIAndFocus();
+            }
+        });
+
+        // --- Results Logic ---
+
+        const calculateResults = () => {
+            const rowSums = new Array(20).fill(0);
+
+            for (let q = 1; q <= 200; q++) {
+                const score = currentAnswers[q];
+                if (score !== null) {
+                    // Q1 -> index 0, Q2 -> index 1, ..., Q20 -> index 19.
+                    // Q21 -> index 0. The formula is (q - 1) % 20
+                    const giftIndex = (q - 1) % 20;
+                    rowSums[giftIndex] += score;
+                }
+            }
+
+            const sortedGifts = CATEGORIES.map((gift, index) => ({
+                gift: gift,
+                score: rowSums[index]
+            })).sort((a, b) => b.score - a.score);
+
+            return sortedGifts;
+        };
+        
+        const renderResults = () => {
+            const sortedGifts = calculateResults();
+            const topGift = sortedGifts[0];
+
+            // Show Results View and hide Assessment View
+            assessmentView.classList.add('hidden');
+            resultsView.classList.remove('hidden');
+
+            // 1. Top Gift Display
+            topGiftDisplay.innerHTML = `
+                <h4 class="text-xl font-semibold mb-1">Your Primary Gift</h4>
+                <h1 class="text-5xl font-extrabold text-green-700">${topGift.gift}</h1>
+                <p class="text-lg mt-2">Score: <b>${topGift.score}</b></p>
+            `;
+
+            // 2. Top Four List
+            topFourList.innerHTML = '';
+            sortedGifts.slice(0, 4).forEach((item, index) => {
+                const rankClass = index === 0 ? 'bg-yellow-200 font-bold' : 'bg-white';
+                topFourList.innerHTML += `
+                    <div class="flex justify-between items-center p-3 rounded-lg shadow-sm border border-gray-200 ${rankClass}">
+                        <span class="text-lg">#${index + 1}: ${item.gift}</span>
+                        <span class="text-xl text-indigo-600">${item.score}</span>
+                    </div>
+                `;
+            });
+        };
+        
+        // --- Public/Window Functions (for use by Firebase script and buttons) ---
+        
+        // Loads data and finds the next question to start or finish
+        window.app.loadProgressAndStart = async (firebaseFailed = false) => {
+            let loadedAnswers = null;
+            if (!firebaseFailed && window.app.firestore) {
+                loadedAnswers = await window.app.firestore.loadProgress();
+            }
+            
+            if (loadedAnswers) {
+                currentAnswers = loadedAnswers;
+                // Find the next unanswered question
+                currentQuestion = 1;
+                while (currentQuestion <= 200 && currentAnswers[currentQuestion] !== null) {
+                    currentQuestion++;
+                }
+            } else {
+                currentQuestion = 1;
+            }
+
+            if (currentQuestion > 200) {
+                renderResults();
+            } else {
+                resultsView.classList.add('hidden');
+                assessmentView.classList.remove('hidden');
+                updateUIAndFocus();
+            }
+        };
+
+        // Resets all data and restarts
+        window.app.resetAssessment = () => {
+            if (confirm("Are you sure you want to clear ALL progress and start a new assessment?")) {
+                currentAnswers = new Array(201).fill(null);
+                currentQuestion = 1;
+                window.app.firestore.saveProgress(currentAnswers);
+                resultsView.classList.add('hidden');
+                assessmentView.classList.remove('hidden');
+                updateUIAndFocus();
+                showStatus("Assessment reset. Ready to start!", false);
+            }
+        };
+        
+        // If Firebase fails to initialize, use this fallback to start the app.
+        if (typeof __initial_auth_token === 'undefined' && typeof window.app.loadProgressAndStart === 'undefined') {
+             window.onload = () => {
+                window.app.loadProgressAndStart(true);
+            };
+        }
+        
+    </script>
+</body>
+</html>
