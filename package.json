@@ -1,7 +1,6 @@
 {
       "name": "spiritual-gifts-assessment",
       "version": "1.0.0",
-      "main": "index.html"
       "description": "Static HTML/JS spiritual gifts assessment.",
       "scripts": {
         "start": "echo 'Serving static files...'"
