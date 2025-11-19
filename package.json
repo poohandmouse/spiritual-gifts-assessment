@@ -1,8 +1,5 @@
-{
-      "name": "spiritual-gifts-assessment",
-      "version": "1.0.0",
-      "description": "Static HTML/JS spiritual gifts assessment.",
-      "scripts": {
-        "start": "echo 'Serving static files...'"
-      }
-    }
+// package.json
+"homepage": "https://poohandmouse.github.io/spiritual-gifts-assessment/",
+"scripts": {
+  "build": "vite build"   // or "react-scripts build"
+}
