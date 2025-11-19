@@ -1,5 +1,4 @@
-// package.json
 "homepage": "https://poohandmouse.github.io/spiritual-gifts-assessment/",
 "scripts": {
-  "build": "vite build"   // or "react-scripts build"
+  "build": "vite build"
 }
